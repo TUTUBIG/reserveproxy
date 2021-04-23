@@ -382,15 +382,17 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 type loadBalancePolicyType int
 
 const (
-	loadBalanceRandom loadBalancePolicyType = iota
+	LoadBalanceRandom loadBalancePolicyType = iota
+	LoadBalanceRound
 )
 
 type LoadBalancer struct {
 	ps                []*ReverseProxy
 	loadBalancePolicy loadBalancePolicyType
+	index             int
 }
 
-func NewLoadBalancer(targets []*url.URL, ps []*ReverseProxy, loadBalancePolicy loadBalancePolicyType) *LoadBalancer {
+func NewLoadBalancer(targets []*url.URL, loadBalancePolicy loadBalancePolicyType) *LoadBalancer {
 	lb := &LoadBalancer{
 		ps:                make([]*ReverseProxy, 0, len(targets)),
 		loadBalancePolicy: loadBalancePolicy,
@@ -405,8 +407,14 @@ func NewLoadBalancer(targets []*url.URL, ps []*ReverseProxy, loadBalancePolicy l
 func (l *LoadBalancer) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	var i int
 	switch l.loadBalancePolicy {
-	case loadBalanceRandom:
+	case LoadBalanceRandom:
 		i = rand.Intn(len(l.ps))
+	case LoadBalanceRound:
+		i = l.index
+		l.index++
+		if l.index >= len(l.ps) {
+			l.index = 0
+		}
 	}
 	if req.Method != "CONNECT" {
 		l.ps[i].ProxyHTTP(rw, req)
